@@ -159,8 +159,8 @@ int main() {
     stdio_init_all();
     printf("oi\n");
 
-    // Aloca em endereço fixo de RAM
-    volatile AudioSystem_t* audio_system = (volatile AudioSystem_t*)0x20040000;
+    // Aloca em endereço fixo de RAM (SEM volatile aqui!)
+    AudioSystem_t* audio_system = (AudioSystem_t*)0x20040000;
     
     audio_system->wav_position = 0;
     audio_system->fala_detectada = false;
