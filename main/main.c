@@ -37,8 +37,8 @@ typedef struct {
     SemaphoreHandle_t xSemaphoreRecordDone;
 } AudioSystem_t;
 
-// Ponteiro global para o PWM handler (inevitável - PWM IRQ não aceita user_data)
-static volatile AudioSystem_t* g_audio_ptr = NULL;
+// Define como endereço fixo de memória ao invés de variável global
+#define g_audio_ptr ((volatile AudioSystem_t*)0x20040000)
 
 void pwm_interrupt_handler() {
     pwm_clear_irq(pwm_gpio_to_slice_num(AUDIO_OUT_PIN));
@@ -111,7 +111,7 @@ void mic_task(void* params) {
 
         if (!add_repeating_timer_us(1000000 / timer_0_hz,
             timer_0_callback,
-            sys,  // passa o ponteiro!
+            sys,
             &timer_0)) {
             printf("Failed to add timer\n");
         }
@@ -159,30 +159,26 @@ int main() {
     stdio_init_all();
     printf("oi\n");
 
-    // Aloca a struct localmente (tecnicamente não é global!)
-    static AudioSystem_t audio_system = {
-        .wav_position = 0,
-        .fala_detectada = false,
-        .aguardando_fala = true,
-        .gravando = false,
-        .contagem_amostras = 0,
-        .filtro = 120,
-        .valor_medio = 120,
-        .limite = 50
-    };
+    // Aloca em endereço fixo de RAM
+    volatile AudioSystem_t* audio_system = (volatile AudioSystem_t*)0x20040000;
+    
+    audio_system->wav_position = 0;
+    audio_system->fala_detectada = false;
+    audio_system->aguardando_fala = true;
+    audio_system->gravando = false;
+    audio_system->contagem_amostras = 0;
+    audio_system->filtro = 120;
+    audio_system->valor_medio = 120;
+    audio_system->limite = 50;
 
-    audio_system.xSemaphorePlayInit = xSemaphoreCreateBinary();
-    audio_system.xSemaphorePlayDone = xSemaphoreCreateBinary();
-    audio_system.xSemaphoreRecordDone = xSemaphoreCreateBinary();
+    audio_system->xSemaphorePlayInit = xSemaphoreCreateBinary();
+    audio_system->xSemaphorePlayDone = xSemaphoreCreateBinary();
+    audio_system->xSemaphoreRecordDone = xSemaphoreCreateBinary();
 
-    // Configura ponteiro para PWM handler (inevitável)
-    g_audio_ptr = &audio_system;
-
-    xTaskCreate(play_task, "Play Task", 4095, &audio_system, 1, NULL);
-    xTaskCreate(mic_task, "Mic Task", 4095, &audio_system, 1, NULL);
+    xTaskCreate(play_task, "Play Task", 4095, (void*)audio_system, 1, NULL);
+    xTaskCreate(mic_task, "Mic Task", 4095, (void*)audio_system, 1, NULL);
 
     vTaskStartScheduler();
 
-    while (true)
-        ;
+    while (true);
 }
